@@ -1,0 +1,184 @@
+---
+import Menu from '../../components/Menu.astro';
+import { createClient } from '@libsql/client';
+
+// Initialize Turso client
+const client = createClient({
+  url: import.meta.env.TURSO_DATABASE_URL,
+  authToken: import.meta.env.TURSO_AUTH_TOKEN,
+});
+
+// Fetch all instances from Turso
+let instances = [];
+try {
+  const result = await client.execute('SELECT sku, qty FROM Instances');
+  instances = result.rows;
+} catch (error) {
+  console.error('Error fetching instances:', error);
+}
+---
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pin - i</title>
+</head>
+<body>
+    <Menu />
+    <main>
+        <div class="search-container">
+            <input type="text" id="searchBar" class="search-bar" placeholder="Search...">
+        </div>
+
+        <!-- Notion-like table -->
+        <div class="table-container">
+            <table class="instances-table">
+                <thead>
+                    <tr>
+                        <th class="border-r">SKU</th>
+                        <th>QTY</th>
+                    </tr>
+                </thead>
+                <tbody id="instancesTableBody">
+                    {instances.map((instance: { sku: string; qty: number }) => (
+                        <tr>
+                            <td class="border-r">{instance.sku}</td>
+                            <td>{instance.qty}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    </main>
+    
+    <!-- Floating Action Button -->
+    <button class="fab" aria-label="Add">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+    </button>
+</body>
+</html>
+
+<style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+        color: #37352f;
+    }
+    main {
+        padding: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .search-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 20px;
+        width: 100%;
+    }
+    .search-bar {
+        width: 100%;
+        padding: 10px 15px;
+        font-size: 16px;
+        border: 1px solid #e0e0e0;
+        border-radius: 3px;
+        outline: none;
+    }
+    .fab {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        width: 40px;
+        height: 40px;
+        border-radius: 5px;
+        background-color: white;
+        color: #6b7280;
+        border: 1px solid #d1d5db;
+        font-size: 24px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background-color 0.3s, transform 0.3s;
+        z-index: 1000;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .fab:hover {
+        background-color: #f9fafb;
+    }
+    .fab:active {
+        transform: scale(0.95);
+    }
+    .table-container {
+        overflow-x: auto;
+        border-left: 1px solid #e0e0e0;
+        border-right: 1px solid #e0e0e0;
+    }
+    .instances-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 14px;
+    }
+    .instances-table th,
+    .instances-table td {
+        padding: 8px 16px;
+        text-align: left;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    .instances-table th {
+        font-weight: 600;
+        color: #6b7280;
+        background-color: #fafafa;
+        border-top: 1px solid #e0e0e0;
+    }
+    .instances-table tr:hover {
+        background-color: #f9f9f9;
+    }
+    .instances-table .border-r {
+        border-right: 1px solid #e0e0e0;
+    }
+</style>
+
+<script define:vars={{ instances }}>
+    const fab = document.querySelector('.fab');
+    const searchBar = document.getElementById('searchBar');
+    const instancesTableBody = document.getElementById('instancesTableBody');
+
+    if (fab) {
+        fab.addEventListener('click', () => {
+            window.location.href = '/pin/p';
+        });
+    }
+
+    if (searchBar) {
+        searchBar.addEventListener('input', debounce(performSearch, 300));
+    }
+
+    function performSearch() {
+        const searchTerm = searchBar.value.trim().toLowerCase();
+        const rows = instancesTableBody.querySelectorAll('tr');
+
+        rows.forEach(row => {
+            const sku = row.querySelector('td:first-child').textContent.toLowerCase();
+            const qty = row.querySelector('td:last-child').textContent.toLowerCase();
+            
+            if (sku.includes(searchTerm) || qty.includes(searchTerm)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
+    function debounce(func, delay) {
+        let timeoutId;
+        return function (...args) {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
+</script>
