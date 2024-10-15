@@ -18,7 +18,7 @@ interface Instance {
 let instances: Instance[] = [];
 try {
   const result = await client.execute('SELECT sku, qty FROM Instances');
-  instances = result.rows as Instance[];
+  instances = result.rows as unknown as Instance[];
 } catch (error) {
   console.error('Error fetching instances:', error);
 }
@@ -66,14 +66,17 @@ try {
         </svg>
     </button>
 
-    <!-- Bottom Sheet -->
+    <!-- Modern Bottom Sheet -->
     <div id="bottomSheet" class="bottom-sheet">
         <div class="bottom-sheet-content">
-            <h2>Update Quantity</h2>
-            <p>SKU: <span id="selectedSku"></span></p>
-            <input type="number" id="qtyInput" min="0" step="1">
-            <button id="updateQty">Update</button>
-            <button id="closeSheet">Cancel</button>
+            <div class="bottom-sheet-header">
+                <h2><span id="selectedSku"></span></h2>
+                <button id="closeSheet" class="close-button">&times;</button>
+            </div>
+            <div class="bottom-sheet-body">
+                <input type="number" id="qtyInput" min="0" step="1" class="qty-input">
+                <button id="updateQty" class="update-button">Update</button>
+            </div>
         </div>
     </div>
 </body>
@@ -179,34 +182,56 @@ try {
         padding: 20px;
     }
 
-    .bottom-sheet h2 {
-        margin-top: 0;
+    .bottom-sheet-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
     }
 
-    .bottom-sheet input {
+    .bottom-sheet-header h2 {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: normal;
+    }
+
+    .close-button {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #6b7280;
+    }
+
+    .bottom-sheet-body {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .qty-input {
         width: 100%;
         padding: 10px;
         margin: 10px 0;
         border: 1px solid #e0e0e0;
         border-radius: 4px;
+        font-size: 1rem;
     }
 
-    .bottom-sheet button {
+    .update-button {
         padding: 10px 20px;
-        margin-right: 10px;
-        border: none;
-        border-radius: 4px;
+        background-color: white;
+        color: #333;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
         cursor: pointer;
+        font-size: 1rem;
+        transition: background-color 0.3s, border-color 0.3s;
+        margin-bottom: 20px; /* Add bottom spacing */
     }
 
-    #updateQty {
-        background-color: #4CAF50;
-        color: white;
-    }
-
-    #closeSheet {
-        background-color: #f44336;
-        color: white;
+    .update-button:hover {
+        background-color: #f5f5f5;
+        border-color: #d0d0d0;
     }
 </style>
 
@@ -241,7 +266,7 @@ try {
     // Add event listeners for qty cells
     const qtyCells = document.querySelectorAll('.qty-cell');
     qtyCells.forEach(cell => {
-        cell.addEventListener('click', () => openBottomSheet(cell));
+        cell.addEventListener('click', () => openBottomSheet(cell as HTMLElement));
     });
 
     function openBottomSheet(cell: HTMLElement) {
