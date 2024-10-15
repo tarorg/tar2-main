@@ -8,11 +8,17 @@ const client = createClient({
   authToken: import.meta.env.TURSO_AUTH_TOKEN,
 });
 
+// Define the Instance type
+interface Instance {
+  sku: string;
+  qty: number;
+}
+
 // Fetch all instances from Turso
-let instances = [];
+let instances: Instance[] = [];
 try {
   const result = await client.execute('SELECT sku, qty FROM Instances');
-  instances = result.rows;
+  instances = result.rows as Instance[];
 } catch (error) {
   console.error('Error fetching instances:', error);
 }
@@ -41,10 +47,10 @@ try {
                     </tr>
                 </thead>
                 <tbody id="instancesTableBody">
-                    {instances.map((instance: { sku: string; qty: number }) => (
+                    {instances.map((instance: Instance) => (
                         <tr>
                             <td class="border-r">{instance.sku}</td>
-                            <td>{instance.qty}</td>
+                            <td class="qty-cell" data-sku={instance.sku}>{instance.qty}</td>
                         </tr>
                     ))}
                 </tbody>
@@ -59,6 +65,17 @@ try {
             <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
     </button>
+
+    <!-- Bottom Sheet -->
+    <div id="bottomSheet" class="bottom-sheet">
+        <div class="bottom-sheet-content">
+            <h2>Update Quantity</h2>
+            <p>SKU: <span id="selectedSku"></span></p>
+            <input type="number" id="qtyInput" min="0" step="1">
+            <button id="updateQty">Update</button>
+            <button id="closeSheet">Cancel</button>
+        </div>
+    </div>
 </body>
 </html>
 
@@ -141,12 +158,75 @@ try {
     .instances-table .border-r {
         border-right: 1px solid #e0e0e0;
     }
+    .qty-cell {
+        cursor: pointer;
+    }
+
+    .bottom-sheet {
+        position: fixed;
+        bottom: -100%;
+        left: 0;
+        width: 100%;
+        background-color: white;
+        border-top-left-radius: 20px;
+        border-top-right-radius: 20px;
+        transition: bottom 0.3s ease-out;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        z-index: 1001;
+    }
+
+    .bottom-sheet-content {
+        padding: 20px;
+    }
+
+    .bottom-sheet h2 {
+        margin-top: 0;
+    }
+
+    .bottom-sheet input {
+        width: 100%;
+        padding: 10px;
+        margin: 10px 0;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+    }
+
+    .bottom-sheet button {
+        padding: 10px 20px;
+        margin-right: 10px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    #updateQty {
+        background-color: #4CAF50;
+        color: white;
+    }
+
+    #closeSheet {
+        background-color: #f44336;
+        color: white;
+    }
 </style>
 
-<script define:vars={{ instances }}>
+<script>
+    import { createClient } from '@libsql/client';
+
     const fab = document.querySelector('.fab');
-    const searchBar = document.getElementById('searchBar');
+    const searchBar = document.getElementById('searchBar') as HTMLInputElement;
     const instancesTableBody = document.getElementById('instancesTableBody');
+    const bottomSheet = document.getElementById('bottomSheet') as HTMLElement;
+    const selectedSku = document.getElementById('selectedSku');
+    const qtyInput = document.getElementById('qtyInput') as HTMLInputElement;
+    const updateQtyBtn = document.getElementById('updateQty');
+    const closeSheetBtn = document.getElementById('closeSheet');
+
+    // Initialize Turso client on the client-side
+    const client = createClient({
+        url: (window as any).TURSO_DATABASE_URL || '',
+        authToken: (window as any).TURSO_AUTH_TOKEN || '',
+    });
 
     if (fab) {
         fab.addEventListener('click', () => {
@@ -158,13 +238,72 @@ try {
         searchBar.addEventListener('input', debounce(performSearch, 300));
     }
 
+    // Add event listeners for qty cells
+    const qtyCells = document.querySelectorAll('.qty-cell');
+    qtyCells.forEach(cell => {
+        cell.addEventListener('click', () => openBottomSheet(cell));
+    });
+
+    function openBottomSheet(cell: HTMLElement) {
+        const sku = cell.dataset.sku;
+        const currentQty = cell.textContent;
+        if (selectedSku && qtyInput) {
+            selectedSku.textContent = sku || '';
+            qtyInput.value = currentQty || '';
+        }
+        if (bottomSheet) {
+            bottomSheet.style.bottom = '0';
+        }
+    }
+
+    if (closeSheetBtn) {
+        closeSheetBtn.addEventListener('click', () => {
+            if (bottomSheet) {
+                bottomSheet.style.bottom = '-100%';
+            }
+        });
+    }
+
+    if (updateQtyBtn) {
+        updateQtyBtn.addEventListener('click', async () => {
+            if (!selectedSku || !qtyInput) return;
+            
+            const sku = selectedSku.textContent;
+            const newQty = qtyInput.value;
+            
+            try {
+                // Update the database
+                await client.execute({
+                    sql: 'UPDATE Instances SET qty = ? WHERE sku = ?',
+                    args: [newQty, sku]
+                });
+
+                // Update the UI
+                const cell = document.querySelector(`.qty-cell[data-sku="${sku}"]`);
+                if (cell) {
+                    cell.textContent = newQty;
+                }
+
+                // Close the bottom sheet
+                if (bottomSheet) {
+                    bottomSheet.style.bottom = '-100%';
+                }
+            } catch (error) {
+                console.error('Error updating quantity:', error);
+                alert('Failed to update quantity. Please try again.');
+            }
+        });
+    }
+
     function performSearch() {
+        if (!searchBar || !instancesTableBody) return;
+        
         const searchTerm = searchBar.value.trim().toLowerCase();
         const rows = instancesTableBody.querySelectorAll('tr');
 
         rows.forEach(row => {
-            const sku = row.querySelector('td:first-child').textContent.toLowerCase();
-            const qty = row.querySelector('td:last-child').textContent.toLowerCase();
+            const sku = row.querySelector('td:first-child')?.textContent?.toLowerCase() || '';
+            const qty = row.querySelector('td:last-child')?.textContent?.toLowerCase() || '';
             
             if (sku.includes(searchTerm) || qty.includes(searchTerm)) {
                 row.style.display = '';
@@ -174,11 +313,16 @@ try {
         });
     }
 
-    function debounce(func, delay) {
-        let timeoutId;
-        return function (...args) {
+    function debounce(func: Function, delay: number) {
+        let timeoutId: ReturnType<typeof setTimeout>;
+        return function (this: any, ...args: any[]) {
             clearTimeout(timeoutId);
             timeoutId = setTimeout(() => func.apply(this, args), delay);
         };
     }
+</script>
+
+<script is:inline define:vars={{ TURSO_DATABASE_URL: import.meta.env.TURSO_DATABASE_URL, TURSO_AUTH_TOKEN: import.meta.env.TURSO_AUTH_TOKEN }}>
+  window.TURSO_DATABASE_URL = TURSO_DATABASE_URL;
+  window.TURSO_AUTH_TOKEN = TURSO_AUTH_TOKEN;
 </script>
